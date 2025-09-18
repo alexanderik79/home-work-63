@@ -1,20 +1,22 @@
 const express = require('express');
 const session = require('express-session');
-const users = require('./data/users');
+require('dotenv').config();
+const mongoose = require('./db/mongoose');
+const User = require('./models/User');
 const passport = require('./middleware/passport-config');
 const ensureAuthenticated = require('./middleware/auth-check');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT;
 
 app.use(express.static('public'));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 app.use(session({
-  secret: 'passport-secret-key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -27,14 +29,23 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.post('/register', (req, res) => {
+app.post('/register', async (req, res) => {
   const { email, password } = req.body;
-  if (users.find(u => u.email === email)) {
-    return res.status(400).send('User already exists');
+  try {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).send('User already exists');
+    }
+
+    const newUser = new User({ email, password });
+    await newUser.save();
+
+    console.log(`[REGISTER] New user: ${email}`);
+    res.send('Registration successful');
+  } catch (err) {
+    console.error('[REGISTER] Error:', err);
+    res.status(500).send('Registration failed');
   }
-  users.push({ id: Date.now(), email, password });
-  console.log(`[REGISTER] New user: ${email}`);
-  res.send('Registration successful');
 });
 
 app.post('/login', passport.authenticate('local', {
@@ -64,7 +75,6 @@ app.get('/login.html', (req, res) => {
 app.get('/register.html', (req, res) => {
   res.sendFile(__dirname + '/public/register.html');
 });
-
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
