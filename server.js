@@ -210,6 +210,72 @@ app.get('/register.html', (req, res) => {
   res.sendFile(__dirname + '/public/register.html');
 });
 
+app.get('/tasks/stream', ensureAuthenticated, (req, res) => {
+    // Устанавливаем заголовки для потоковой передачи данных (JSON Lines или HTML)
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    // Получаем курсор, который будет перебирать задачи пользователя
+    const taskCursor = Task.find({ owner: req.user._id }).cursor();
+
+    res.write('Streaming tasks (one per line):\n');
+    res.write('----------------------------------\n');
+
+    //  итерирование по курсору
+    taskCursor.eachAsync(task => {
+        const taskInfo = `ID: ${task._id}, Title: "${task.title}", Completed: ${task.completed}\n`;
+        res.write(taskInfo);
+    }).then(() => {
+        res.end('\n----------------------------------\nStream complete.');
+    }).catch(err => {
+        console.error('[CURSOR] Streaming error:', err);
+        res.status(500).end('Streaming failed.');
+    });
+});
+
+app.get('/tasks/stats', ensureAuthenticated, async (req, res) => {
+    try {
+        const stats = await Task.aggregate([
+            { 
+                $match: { owner: req.user._id } 
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalTasks: { $sum: 1 },
+                    completedTasks: { 
+                        $sum: { 
+                            $cond: ['$completed', 1, 0]
+                        }
+                    },
+                    earliestTask: { $min: '$createdAt' }, 
+                    latestTask: { $max: '$createdAt' }   
+                }
+            },
+
+            {
+                $project: {
+                    _id: 0,
+                    totalTasks: 1,
+                    completedTasks: 1,
+                    pendingTasks: { $subtract: ['$totalTasks', '$completedTasks'] },
+                    earliestTask: 1,
+                    latestTask: 1
+                }
+            }
+        ]);
+
+        if (stats.length > 0) {
+            res.status(200).send(stats[0]);
+        } else {
+            res.status(200).send({ totalTasks: 0, completedTasks: 0, pendingTasks: 0 });
+        }
+    } catch (err) {
+        console.error('[AGGREGATION] Stats error:', err);
+        res.status(500).send({ error: 'Failed to fetch task statistics' });
+    }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });

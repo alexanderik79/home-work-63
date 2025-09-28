@@ -1,10 +1,10 @@
-# 🛡️ Express + Passport + MongoDB CRUD Tasks
+# 🛡️ Express + Passport + MongoDB CRUD Tasks (Advanced)
 
 A **Node.js web application** with:
 - **User authentication** via Passport.js (session-based)
 - **MongoDB Atlas** for storing users and tasks
 - **Full CRUD interface** for managing tasks
-- Each task is **bound to the logged-in user** and only visible/editable by its owner
+- **Advanced data handling** using Cursors and Aggregation Pipelines
 
 ---
 
@@ -16,9 +16,9 @@ cd your-repo-name
 npm install
 ```
 
-Create `.env` file:
+Create a `.env` file:
 
-```env
+```
 MONGO_URI=your-mongodb-atlas-uri
 SESSION_SECRET=your-session-secret
 PORT=3000
@@ -31,85 +31,95 @@ node server.js
 ```
 
 Then open in browser:
-- [http://localhost:3000/register.html](http://localhost:3000/register.html) — registration form  
-- [http://localhost:3000/login.html](http://localhost:3000/login.html) — login form  
-- [http://localhost:3000/protected](http://localhost:3000/protected) — protected page (requires login)
+
+- http://localhost:3000/register.html — registration form  
+- http://localhost:3000/login.html — login form  
+- http://localhost:3000/protected — protected page (requires login)
+
+---
+
+## ✨ New Advanced Features (HW63)
+
+### 1. Data Streaming with Cursors
+A dedicated route (`/tasks/stream`) uses **Mongoose cursors** to iterate over all user tasks.  
+This prevents memory overflow when dealing with large collections by processing documents one-by-one or chunk by chunk.
+
+### 2. Aggregation for Statistics
+The route (`/tasks/stats`) uses a **MongoDB Aggregation Pipeline** to calculate statistics for the logged-in user, including:
+- Total tasks
+- Completed tasks
+- Pending tasks
+- Earliest and latest task dates
 
 ---
 
 ## 🔧 Technologies Used
-- **Node.js + Express.js**
-- **Passport.js** (`passport-local`)
-- **express-session**, **cookie-parser**, **body-parser**
-- **MongoDB + Mongoose**
-- Plain **HTML forms** (login/register/add tasks)
 
----
-
-## 🔐 Authentication Flow
-- Uses `passport-local` strategy
-- Authenticates with **email + password**
-- Session stored in cookie (`connect.sid`)
-- Cookie options: `httpOnly`, `secure: false`, `maxAge: 1 day`
-
----
-
-## 📦 Models
-
-### User
-- `email: String`
-- `password: String (hashed)`
-
-### Task
-- `title: String`
-- `completed: Boolean`
-- `owner: ObjectId (User)`
-- `createdAt: Date`
+- Node.js + Express.js  
+- Passport.js (`passport-local`)  
+- express-session, cookie-parser, body-parser  
+- MongoDB + Mongoose  
+- Plain HTML forms (login/register/add tasks)  
 
 ---
 
 ## 🔗 Routes
 
 ### Auth Routes
-| Route            | Method | Description                           |
-|------------------|--------|---------------------------------------|
-| `/register`      | POST   | Register a new user                   |
-| `/login`         | POST   | Log in using Passport                 |
-| `/logout`        | GET    | Log out and destroy session           |
-| `/protected`     | GET    | Protected route (requires auth)       |
+
+| Route       | Method | Description                  |
+|-------------|--------|------------------------------|
+| /register   | POST   | Register a new user          |
+| /login      | POST   | Log in using Passport        |
+| /logout     | GET    | Log out and destroy session  |
+| /protected  | GET    | Protected route (auth only)  |
 
 ### Task Routes
-| Route                   | Method | Description                                      |
-|-------------------------|--------|--------------------------------------------------|
-| `/tasks/add`            | POST   | Create a new task                                |
-| `/tasks/insert-many`    | POST   | Bulk insert multiple tasks                       |
-| `/tasks/update/:id`     | POST   | Update one task by ID                            |
-| `/tasks/update-many`    | POST   | Bulk update tasks (e.g., mark all completed)     |
-| `/tasks/replace/:id`    | POST   | Replace a task completely                        |
-| `/tasks/delete/:id`     | POST   | Delete one task by ID                            |
-| `/tasks/delete-many`    | POST   | Bulk delete tasks (e.g., remove completed ones)  |
+
+| Route              | Method | Description                              |
+|--------------------|--------|------------------------------------------|
+| /tasks/add         | POST   | Create a new task                        |
+| /tasks/insert-many | POST   | Bulk insert multiple tasks               |
+| /tasks/update/:id  | POST   | Update one task by ID                    |
+| /tasks/update-many | POST   | Bulk update tasks (e.g., mark completed) |
+| /tasks/replace/:id | POST   | Replace a task completely                |
+| /tasks/delete/:id  | POST   | Delete one task by ID                    |
+| /tasks/delete-many | POST   | Bulk delete tasks (e.g., remove done)    |
+| /tasks/stream      | GET    | Stream all tasks via MongoDB cursors     |
+| /tasks/stats       | GET    | Get complex task statistics (aggregation)|
+
+---
+
+## 📦 Models
+
+### User
+- `email`: String  
+- `password`: String (hashed)  
+
+### Task
+- `title`: String  
+- `completed`: Boolean  
+- `owner`: ObjectId (User) (Indexed for performance)  
+- `createdAt`: Date  
 
 ---
 
 ## 🧪 Example Requests
 
-### Register a new user
+### Get Task Statistics (JSON)
 ```http
-POST /register
-Content-Type: application/x-www-form-urlencoded
-
-email=alex@example.com&password=1234
+GET /tasks/stats
+Cookie: connect.sid=...
+Accept: application/json
 ```
 
-### Add a single task
+### Stream All Tasks
 ```http
-POST /tasks/add
-Content-Type: application/x-www-form-urlencoded
-
-title=Buy milk
+GET /tasks/stream
+Cookie: connect.sid=...
 ```
 
-### Insert multiple tasks
+### Insert Multiple Tasks
 ```http
 POST /tasks/insert-many
 Content-Type: application/json
@@ -122,23 +132,10 @@ Content-Type: application/json
 }
 ```
 
-### Replace a task
-```http
-POST /tasks/replace/123456
-Content-Type: application/x-www-form-urlencoded
-
-title=New Title&completed=true
-```
-
-### Access protected route
-```http
-GET /protected
-Cookie: connect.sid=...
-```
-
 ---
 
 ## 📁 Project Structure
+
 ```
 project-root/
 ├── models/
@@ -161,11 +158,13 @@ project-root/
 ---
 
 ## 🛡️ Data Protection
-- All task routes require authentication (`ensureAuthenticated`)
-- Tasks are filtered by `owner: req.user._id`
-- Users can **only edit/delete their own tasks**
+
+- All task routes require authentication (`ensureAuthenticated`)  
+- Tasks are filtered by owner: `req.user._id` in all read/write operations  
+- Users can only edit/delete their own tasks  
 
 ---
 
 ## 📤 License
+
 Built for educational purposes. Free to use and modify.
