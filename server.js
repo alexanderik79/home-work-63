@@ -4,6 +4,7 @@ require('dotenv').config();
 const mongoose = require('./db/mongoose');
 const User = require('./models/User');
 const Task = require('./models/Task');
+const Assignment = require('./models/Assignment');
 const passport = require('./middleware/passport-config');
 const ensureAuthenticated = require('./middleware/auth-check');
 const bodyParser = require('body-parser');
@@ -275,6 +276,90 @@ app.get('/tasks/stats', ensureAuthenticated, async (req, res) => {
         res.status(500).send({ error: 'Failed to fetch task statistics' });
     }
 });
+
+
+// 1. Створення/Додавання 5 документів (insertMany)
+app.post('/assignments/seed', async (req, res) => {
+    try {
+        await Assignment.deleteMany({}); // Очистити перед заповненням
+        const assignments = [
+            { name: "Олег", subject: "Математика", score: 92 },
+            { name: "Анна", subject: "Історія", score: 78 },
+            { name: "Іван", subject: "Фізика", score: 81 },
+            { name: "Марія", subject: "Англійська", score: 95 },
+            { name: "Сергій", subject: "Хімія", score: 84 }
+        ];
+        const result = await Assignment.insertMany(assignments);
+        res.status(201).json({ 
+            message: "5 документів додано.", 
+            count: result.length 
+        });
+    } catch (err) {
+        res.status(500).send({ error: "Помилка при додаванні документів" });
+    }
+});
+
+// 2. Виконайте запит (score > 80)
+app.get('/assignments/find/high-scores', async (req, res) => {
+    try {
+        // Mongoose equivalent: db.assignments.find({ score: { $gt: 80 } })
+        const highScores = await Assignment.find({ score: { $gt: 80 } });
+        res.status(200).json(highScores);
+    } catch (err) {
+        res.status(500).send({ error: "Помилка запиту" });
+    }
+});
+
+// 3. Оновлення (збільшення score на 5, де score < 85)
+app.patch('/assignments/update/low-score', async (req, res) => {
+    try {
+        // Mongoose equivalent: db.assignments.updateOne({ score: { $lt: 85 } }, { $inc: { score: 5 } })
+        const result = await Assignment.updateOne(
+            { score: { $lt: 85 } }, 
+            { $inc: { score: 5 } }
+        );
+        res.status(200).json({ 
+            message: "Оновлено одного студента з балом < 85", 
+            modifiedCount: result.modifiedCount 
+        });
+    } catch (err) {
+        res.status(500).send({ error: "Помилка оновлення" });
+    }
+});
+
+// 4. Видалення (видалення студента з найнижчим балом)
+app.delete('/assignments/delete/lowest-score', async (req, res) => {
+    try {
+        // 1. Знайти студента з найменшим балом
+        const lowestScoreStudent = await Assignment.findOne({}).sort({ score: 1 });
+
+        if (!lowestScoreStudent) {
+            return res.status(404).send({ message: "Колекція порожня." });
+        }
+
+        // 2. Видалити знайдений документ
+        // Mongoose equivalent: db.assignments.deleteOne({ _id: lowestScoreStudent._id })
+        await Assignment.deleteOne({ _id: lowestScoreStudent._id });
+
+        res.status(200).json({ 
+            message: `Видалено студента: ${lowestScoreStudent.name} з балом ${lowestScoreStudent.score}` 
+        });
+    } catch (err) {
+        res.status(500).send({ error: "Помилка видалення" });
+    }
+});
+
+// 5. Проекція (вивести тільки ім'я та бал)
+app.get('/assignments/find/projection', async (req, res) => {
+    try {
+        // Mongoose equivalent: db.assignments.find({}, { name: 1, score: 1, _id: 0 })
+        const projection = await Assignment.find({}, { name: 1, score: 1, _id: 0 });
+        res.status(200).json(projection);
+    } catch (err) {
+        res.status(500).send({ error: "Помилка проекції" });
+    }
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
