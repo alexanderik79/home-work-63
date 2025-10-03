@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # 1. Сервис для MongoDB
+  mongo:
+    image: mongo:latest # Официальный образ MongoDB
+    container_name: task_db
+    # Опционально: ports: ["27017:27017"]
+    volumes:
+      # Сохранение данных между запусками
+      - mongo-data:/data/db 
+
+  # 2. Сервис для Express-додатка
+  web:
+    build: . # Использовать Dockerfile в текущей папке
+    container_name: task_app
+    restart: always
+    ports:
+      # Прокидываем порт 3000 контейнера на порт 3000 хоста
+      - "3000:3000" 
+    environment:
+      # URL для подключения к сервису 'mongo'
+      MONGO_URI: mongodb://mongo:27017/taskmanager_db
+      PORT: 3000
+      # Секрет для Express Session
+      SESSION_SECRET: your_very_secret_key_for_docker # ОБЯЗАТЕЛЬНО задайте секретный ключ
+    
+    # Volumes для синхронизации кода и "горячей перезагрузки"
+    volumes:
+      # Синхронизация локальной директории (D:\course\home-work-63) с /app в контейнере
+      - .:/app
+      # Исключение: не синхронизировать папку node_modules, 
+      # чтобы использовать зависимости, установленные ВНУТРИ контейнера
+      - /app/node_modules 
+    
+    # Запуск web-приложения после успешного запуска mongo
+    depends_on:
+      - mongo
+
+# Определение volume для данных MongoDB
+volumes:
+  mongo-data:
